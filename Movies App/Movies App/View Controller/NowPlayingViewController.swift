@@ -8,55 +8,141 @@
 
 import UIKit
 
-class NowPlayingViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
-
+class NowPlayingViewController: UIViewController, UITableViewDataSource, UITableViewDelegate, UISearchBarDelegate {
+    //refresh data
     lazy var refresh: UIRefreshControl = {
         let refresh = UIRefreshControl()
         refresh.tintColor = .black
+        refresh.addTarget(self, action: #selector(requestData), for: .valueChanged)
         return refresh
     }()
     
-    var movies: [NSDictionary]?
-    @IBOutlet weak var nowPlayingTbl: UITableView!
-    
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        nowPlayingTbl.dataSource = self
-        nowPlayingTbl.delegate = self
+    @objc
+    func requestData() {
+        DispatchQueue.main.async{
+            self.nowPlayingTbl.reloadData()
+            self.refresh.endRefreshing()
+        }
         
-        nowPlayingTbl.refreshControl = refresh
-        fetchMovies()
-        // Do any additional setup after loading the view.
     }
 
+    //search movie
+    
+  
+    func showSearchBar(){
+        let searchController = UISearchController(searchResultsController: nil)
+        navigationItem.searchController = searchController
+        searchController.searchBar.delegate = self
+    }
+   
+    //alert
+    func alert(message: String) -> UIAlertController {
+        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "ok", style: .default, handler: nil))
+        self.present(alert, animated: true, completion: nil)
+        return alert
+    }
+    
+    @objc
+    func loadData(){
+        self.nowPlayingTbl.reloadData()
+    }
+    
+    var movies: [NSDictionary]?
+    @IBOutlet weak var nowPlayingTbl: UITableView!
+   
+    var loading: UIActivityIndicatorView = UIActivityIndicatorView()
+    //main action
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        loading.center = self.view.center
+        loading.hidesWhenStopped = true
+        loading.style = UIActivityIndicatorView.Style.medium
+        self.view.addSubview(loading)
+        loading.startAnimating()
+        nowPlayingTbl.rowHeight = 180
+        nowPlayingTbl.dataSource = self
+        nowPlayingTbl.delegate = self
+        nowPlayingTbl.refreshControl = refresh
+        showSearchBar()
+        if CheckInternet.Connection(){
+            fetchMovies()
+        }else{
+            self.alert(message: "Your Device is not connected with internet")
+        }
+       
+    }
+    
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         return movies?.count ?? 0
     }
+    //load data on tableview
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = nowPlayingTbl.dequeueReusableCell(withIdentifier: "NowPlayingCell") as! NowPlayCell
         let movie = movies![indexPath.row]
         let title = movie["title"] as! String
         let overview = movie["overview"] as! String
-        cell.lblTitle.text = overview
+        let imageview = movie["poster_path"] as! String
+        cell.lblTitle.text = title
         cell.lblOverview.text = overview
+        let baseURL = "https://image.tmdb.org/t/p/w500"
+        let imageUrl = URL(string: baseURL + imageview)
+        let queue = DispatchQueue(label: "loadImage")
+        queue.async{
+                do{
+                    let d = try Data(contentsOf: imageUrl!)
+                    DispatchQueue.main.async {
+                        cell.moviesImage.image = UIImage(data: d)
+                        }
+                    }catch{
+                        print("error")
+                            }
+             }
+        loading.stopAnimating()
         return cell
+        
     }
-    
+    //get api from db
     func fetchMovies() {
         let apiKey = "7eeded1f85c7960423f3d3eb5ca41634"
-        let url = URL(string: "https://api.themoviedb.org/3/movie/now_playing?api_key=\(apiKey)&language=en-US&page=1")
+        let url = URL(string: "https://api.themoviedb.org/3/movie/now_playing?api_key=\(apiKey)&language=en-US")
         let request = URLRequest(url: url!, cachePolicy: NSURLRequest.CachePolicy.reloadIgnoringLocalCacheData, timeoutInterval: 10)
         let session = URLSession(configuration: URLSessionConfiguration.default, delegate: nil, delegateQueue: OperationQueue.main)
         let task: URLSessionTask = session.dataTask(with: request, completionHandler: {
             (dataOrNil, response, error) in if let data = dataOrNil {
                 if let responseDictionary = try! JSONSerialization.jsonObject(with: data, options: []) as? NSDictionary{
-                    print("response \(responseDictionary)")
                     self.movies = responseDictionary["results"] as? [NSDictionary]
                     self.nowPlayingTbl.reloadData()
                 }
             }
         })
         task.resume()
+        
     }
-
+    //show detail movie
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        let sb = UIStoryboard(name: "Main", bundle: nil)
+        let movie = movies![indexPath.row]
+        let baseURL = "https://image.tmdb.org/t/p/w500"
+        let backdrop = movie["backdrop_path"] as! String
+        let backgroundUrl = (baseURL + backdrop)
+        let DetailView = sb.instantiateViewController(identifier: "DetailView") as! DetailMoviesViewController
+        let name = movie["title"] as! String
+        let detail = movie["overview"] as! String
+        let vote = movie["vote_average"] as! NSNumber
+        DetailView.background = backgroundUrl
+        DetailView.name = name
+        DetailView.overview = detail
+        DetailView.vote = vote
+            self.navigationController?.pushViewController(DetailView, animated: true)
+    }
 }
+
+
+
+
+
+    
+ 
+    
+

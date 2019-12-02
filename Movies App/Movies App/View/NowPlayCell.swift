@@ -10,6 +10,9 @@ import UIKit
 
 class NowPlayCell: UITableViewCell {
 
+    @IBOutlet weak var lblTitle: UILabel!
+    @IBOutlet weak var moviesImage: UIImageView!
+    @IBOutlet weak var lblOverview: UILabel!
     override func awakeFromNib() {
         super.awakeFromNib()
         // Initialization code
